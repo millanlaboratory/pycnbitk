@@ -2,10 +2,10 @@
 
 from distutils.core import setup
 
-setup(name='pycnbitobi',
+setup(name='pycnbitk',
     version='1.0',
-    description='cnbiloop-tobi interfaces',
+    description='Python cnbitk libraries',
     author='Luca Tonin',
     author_email='luca.tonin@epfl.ch',
-    packages=['pytobi', 'pycnbi'],
+    packages = ['cnbicore', 'cnbiloop', 'tobicore']
     )
