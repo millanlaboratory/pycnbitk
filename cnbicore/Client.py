@@ -2,22 +2,15 @@
 # -*- coding: utf-8 -*-
 import socket
 import sys
-import NetworkTypes
 
 class Client:
 
-    def __init__(self, protocol = NetworkTypes.SOCKET_PROTOCOL_TCP):
+    def __init__(self):
         self.__address   = None
         self.__connected = False
 
-        self.__protocol = protocol
-        if self.__protocol == NetworkTypes.SOCKET_PROTOCOL_TCP:
-            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif self.__protocol == NetworkTypes.SOCKET_PROTOCOL_UDP:
-            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        else:
-            return NetworkTypes.SOCKET_ERROR_PROTOCOL
-
+        self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__sock.setblocking(0) 
 
     def Connect(self, address, port):
         
@@ -26,17 +19,15 @@ class Client:
         try:
             self.__sock.connect(self.__address)
         except socket.error:
-            self.Disconnect()
-            return NetworkTypes.SOCKET_ERROR_CONNECTION
+            return False 
 
         self.__connected = True
-        return NetworkTypes.SOCKET_SUCCESSFUL
+        return True
 
     def Disconnect(self):
-        if self.__connected == False:
+        if not self.__connected:
             return True
 
-        self.__sock.shutdown(2)
         self.__sock.close()
         self.__connected = False
         self.__sock = None
@@ -45,11 +36,29 @@ class Client:
         return self.__connected
 
     def Send(self, message):
-        if self.__connected == False:
-            return SOCKET_ERROR_CONNECTION
+        if not self.__connected:
+            return False
 
-        self.__sock.sendall(message)
+        try:
+            self.__sock.sendall(message)
+        except socket.error:
+            self.__connected == False
+            return False
 
+    def Recv(self):
+        if not self.__connected:
+            return None
+       
+        msg = None
+        try:
+            msg = self.__sock.recv(512)
+            if len(msg) == 0:
+                self.__connected = False
+                print "[client] - Broken pipe. Disconnection"
+        except socket.error:
+            msg = None
+        
+        return msg
 
 
 if __name__ == '__main__': 
@@ -65,12 +74,17 @@ if __name__ == '__main__':
     
     print "Connected to %s:%s" % (IP, PORT)
 
-    sleep(5)
-    i = 0
-    while i<5:
-        client.Send('100')
+    FirstMessage = 100
+    client.Send(str(FirstMessage))
+    
+    while client.IsConnected():
         sleep(1)
-        i = i+1
+        data = client.Recv()
+
+        if data:
+            print "Received message: %s. " % (data)
+            client.Send(str(int(data)+1))
+
 
     client.Disconnect()
 

@@ -2,23 +2,15 @@
 # -*- coding: utf-8 -*-
 import socket
 import sys
-import NetworkTypes
-import select
+
 class Server:
-    def __init__(self, protocol = NetworkTypes.SOCKET_PROTOCOL_TCP):
+    def __init__(self):
         self.__address   = None
         self.__connected = False
         self.__endpoint  = None
         self.__endpoint_address = None
         
-        self.__protocol = protocol
-        if self.__protocol == NetworkTypes.SOCKET_PROTOCOL_TCP:
-            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif self.__protocol == NetworkTypes.SOCKET_PROTOCOL_UDP:
-            self.__sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        else:
-            return NetworkTypes.SOCKET_ERROR_PROTOCOL
-
+        self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__sock.setblocking(0) 
 
     def Bind(self, address, port):
@@ -33,26 +25,36 @@ class Server:
             
         return True
 
-    def Accept(self):
-        try:
-            (self.__endpoint, addr) = self.__sock.accept()
-            self.__connected = True
-            self.__endpoint_address = addr
-        except socket.error:
-            return False
+    def Accept(self, blocking = 0.0):
+        
+        while (blocking > 0.0 and self.IsConnected() == False):
+            sleep(blocking)
+            try:
+                (self.__endpoint, self.__endpoint_address) = self.__sock.accept()
+                self.__connected = True
+                print "[server] - Enpoint connected from %s:%s" % \
+                (self.__endpoint_address[0], self.__endpoint_address[1])
+                
+            except socket.error:
+                self.__connected = False
 
         return True
-  
+
     def GetEndpoint(self):
-        return self.__endpoint_address
+        if not self.__connected:
+            return None
+        else:
+            return self.__endpoint_address
 
     def Disconnect(self):
-        if self.__connected == False:
+        if not self.__connected:
             return True
 
+        self.__endpoint.shutdown(2)
         self.__endpoint.close()
         self.__endpoint = None
         self.__connected = False
+        self.__sock.shutdown(2)
         self.__sock.close()
         self.__sock = None
     
@@ -60,22 +62,35 @@ class Server:
         return self.__connected
     
     def Send(self, message):
-        if self.__connected == False:
-            return SOCKET_ERROR_CONNECTION
+        if not self.__connected:
+            return False 
+        
+        try:
+            self.__endpoint.sendall(message)
+        except socket.error:
+            self.__connected = False
+            return False
 
-        self.__endpoint.sendall(message)
+        return True
 
     def Recv(self):
-        msg = None
-        readable = select.select([self.__endpoint],[], [],0.0) 
-       
-        if readable:
+        if not self.__connected:
+            return None
+
+        broken = False
+        try:
             msg = self.__endpoint.recv(512)
             if len(msg) == 0:
-                print "endpoint disconnected"
-                return None
-            else:   
-                return msg
+                broken = True
+        except socket.error:
+                broken = True
+            
+        if broken:
+            self.__connected = False
+            print "[server] - Broken pipe. Enpoint disconnected"
+            return None
+        else:   
+            return msg
 
 
 if __name__ == '__main__': 
@@ -91,20 +106,16 @@ if __name__ == '__main__':
     else:
         print "Cannot bind at %s:%s" % (IP, PORT)
 
-    while not server.Accept():
-        sleep(1)
-
-    endpoint = server.GetEndpoint()
-    print "Endpoint connected from %s:%s" % (endpoint[0], endpoint[1])
-
+    server.Accept(1.0)
+    
     while True:
-        #if not server.IsConnected():
-        #    print "Endpoint disconnected"
-        #    server.Accept()
+        server.Accept(1.0)
         
         data = server.Recv()
         if data:
-            print "Message: %s" % (data)
+            print "Received message: %s" % (data)
+            server.Send(data)
+        sleep(1)
 
     server.Disconnect()
    
